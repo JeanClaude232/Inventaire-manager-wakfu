@@ -324,12 +324,25 @@ class interface(Tk):
         #self.boutton_test()
         self.boutton_recette_possible()
 
+        self.key_bind()
+
         self.boutton_ajout_recette()
         self.licence_wakfu()
 
 
         if os.path.exists("save.json"):
             self.load()
+
+    def key_bind(self):
+        for it in self.base_entry_rect.winfo_children():
+            it.bind("<Return>", self.ajout_recette)
+            for i in it.winfo_children():
+                i.bind("<Return>", self.ajout_recette)
+
+        for it in self.base_entry_inv.winfo_children():
+            it.bind("<Return>", self.ajout_inventaire)
+            for i in it.winfo_children():
+                i.bind("<Return>", self.ajout_inventaire)
 
     def licence_wakfu(self):
         label = Label(self, text="WAKFU MMORPG: © 2012 - 2021 Ankama Studio.Tous droits réservés", background=background_color)
@@ -374,7 +387,7 @@ class interface(Tk):
         for key in self.dict_data["recette"]:
             # ajout de l'objet produit par la recette
             self.tableau.insert("", "end", iid=key,
-                                values=(key,  # nom de l'objet
+                                values=(self.dict_data["recette"][key]["resultat"],  # nom de l'objet
                                         "",
                                         self.dict_data["recette"][key]["quantite"],  # quantite produite par la recette
                                         self.dict_data["recette"][key]["quantite voulue"]  # quantité voulue par l'utilisateur
@@ -443,8 +456,19 @@ class interface(Tk):
         self.tableau.grid(row=1, column=1)
 
     def list_recette_init(self):
-        with open("recette_id.json", "r") as f:
-            self.dict_recette = json.load(f)
+        with open("recette.json", "r") as f:
+            dict_recette = json.load(f)
+        dict_temp = {}
+        self.dict_recette = {}
+        for key in dict_recette:
+            dict_temp[key] = dict_recette[key]["resultat"]["item"]
+        for key, value in dict_temp.items():
+            if value not in self.dict_recette:
+                self.dict_recette[value] = [key]
+            else:
+                self.dict_recette[value] += [key]
+
+        print(self.dict_recette)
 
         self.list_recette = list(self.dict_recette.keys())
         self.list_recette.sort()
@@ -455,7 +479,11 @@ class interface(Tk):
         self.item_recette = StringVar(self)
         self.item_recette.set(self.list_recette[0])
 
-        self.deroulant = Combobox(self.base_entry_rect, textvariable=self.item_recette, values=self.list_recette)
+        self.deroulant = Combobox(self.base_entry_rect,
+                                  textvariable=self.item_recette,
+                                  values=self.list_recette,
+                                  state="readonly"
+                                  )
 
         self.deroulant.config(width=35)
         self.deroulant.grid(row=2, column=1, pady=5)
@@ -500,41 +528,46 @@ class interface(Tk):
         self.boutton_ajout_rect = Button(self.base_entry_rect, text="Ajouter", command=self.ajout_recette)
         self.boutton_ajout_rect.grid(row=4, column=1)
 
-    def ajout_recette(self):
+    def ajout_recette(self, *args):
         if self.deroulant.get() != "Pas d'objet trouvée":
             item = self.deroulant.get()
         else:
             return None
 
-        id = str(self.dict_recette[item])
-        recette = self.dict_recette_tot[id]
+        list_id = self.dict_recette[item]
+
         quantite = self.quantite_rect.get()
         if quantite == "":
             quantite = 1
         else:
             quantite = int(quantite)
-
-        self.tableau.insert("", "end", iid=item,
-                            values=(recette["resultat"]["item"],
-                                    "",
-                                    recette["resultat"]["quantite"],
-                                    quantite)
-                            )
-        self.dict_data["recette"][recette["resultat"]["item"]] = {"quantite": recette["resultat"]["quantite"],
-                                                                        "quantite voulue": quantite, "ingredient": {}}
-
-        count = 1
-        for key in recette["ingredient"]:
-            self.dict_data["recette"][recette["resultat"]["item"]]["ingredient"][key] = recette["ingredient"][key]
-            self.tableau.insert("", "end", iid=f"{key}/{item}",
-                                values=("",
-                                        key,
-                                        recette["ingredient"][key],
-                                        recette["ingredient"][key] * quantite
-                                        )
+        for id in list_id:
+            recette = self.dict_recette_tot[id]
+            self.tableau.insert("", "end", iid=id,
+                                values=(recette["resultat"]["item"],
+                                        "",
+                                        recette["resultat"]["quantite"],
+                                        quantite)
                                 )
-            count += 1
-        self.tableau.insert("", "end")
+            self.dict_data["recette"][id] = {
+                                             "resultat": recette["resultat"]["item"],
+                                             "quantite": recette["resultat"]["quantite"],
+                                             "quantite voulue": quantite,
+                                             "ingredient": {}
+                                             }
+
+            count = 1
+            for key in recette["ingredient"]:
+                self.dict_data["recette"][id]["ingredient"][key] = recette["ingredient"][key]
+                self.tableau.insert("", "end", iid=f"{key}/{id}",
+                                    values=("",
+                                            key,
+                                            recette["ingredient"][key],
+                                            recette["ingredient"][key] * quantite
+                                            )
+                                    )
+                count += 1
+            self.tableau.insert("", "end")
 
         self.comparaison_recette_inventaire()
 
@@ -548,7 +581,8 @@ class interface(Tk):
         selec_sp = selec.split("/")
         if len(selec_sp) == 1:
             for ligne in self.tableau.get_children():
-                if selec in ligne:
+                if selec in ligne and not selec+"/" in ligne:
+
                     list_del.append(ligne)
             for it in list_del:
                 self.tableau.delete(it)
@@ -556,7 +590,8 @@ class interface(Tk):
 
         else:
             for ligne in self.tableau.get_children():
-                if selec_sp[1] in ligne:
+                if selec_sp[1] in ligne and not selec_sp[1]+"/" in ligne:
+
                     list_del.append(ligne)
             for it in list_del:
                 self.tableau.delete(it)
@@ -594,7 +629,12 @@ class interface(Tk):
 
         self.item_inv = StringVar(self)
         self.item_inv.set(self.list_item[0])
-        self.select_item_inv = Combobox(self.base_entry_inv, textvariable=self.item_inv, values=self.list_item, width=35)
+        self.select_item_inv = Combobox(self.base_entry_inv,
+                                        textvariable=self.item_inv,
+                                        values=self.list_item,
+                                        width=35,
+                                        state="readonly"
+                                        )
         self.select_item_inv.grid(row=2, column=1, pady=5)
 
     def quantite_inventaire(self):
@@ -637,7 +677,7 @@ class interface(Tk):
         self.boutton_ajout = Button(self.base_entry_inv, text="Ajouter", command=self.ajout_inventaire)
         self.boutton_ajout.grid(row=4, column=1)
 
-    def ajout_inventaire(self):
+    def ajout_inventaire(self, *args):
         if self.select_item_inv.get() != "Pas d'objet trouvée":
             item = self.select_item_inv.get()
         else:
@@ -714,7 +754,7 @@ class interface(Tk):
 
         self.btn_possible = Button(canevas, text="Rechercher", command=self.check_recette_possible)
         self.btn_possible.grid(row=1, column=2)
-        canevas.grid(row=4, column=2)
+        canevas.grid(row=5, column=2)
 
     def check_recette_possible(self):
         with open("items.json", "r") as f:
